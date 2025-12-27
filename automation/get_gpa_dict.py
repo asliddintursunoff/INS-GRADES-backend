@@ -1,120 +1,138 @@
-import asyncio
-from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeoutError
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import UnexpectedAlertPresentException
 
 class LoginFailedError(Exception):
     pass
+def _selenium_getting_gpa_dict(studentId:str,password:str):
+    
 
+    try:
+        options = webdriver.ChromeOptions()
+      
+        options.add_argument("--headless=new")
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
+        options.add_argument("--disable-gpu")
+        options.add_argument("--lang=en-US,en")
+        options.add_experimental_option("excludeSwitches", ["enable-automation"])
+        options.add_experimental_option("useAutomationExtension", False)
+
+
+
+        driver = webdriver.Chrome(options=options)
+        #for waiting
+        wait = WebDriverWait(driver,30)
+        url = "http://ins.inha.uz/ITIS/Start.aspx"
+
+        driver.get(url)
+
+        input_login_field = wait.until(
+            EC.presence_of_element_located((By.CSS_SELECTOR,'input[id=txtInhaID]'))
+            )
+
+        input_login_field.send_keys(studentId)
+
+        input_password_field = wait.until(
+            EC.presence_of_element_located((By.CSS_SELECTOR,'input[id=txtPW]'))
+            )
+        input_password_field.send_keys(password)
+
+
+        login_btn = wait.until(
+            EC.presence_of_element_located((By.XPATH,"//input[@id='btnLogin']"))
+            )
+        login_btn.click()
+
+
+
+
+
+        driver.switch_to.default_content()
+
+        # 2. Switch to LEFT menu frame
+        wait.until(EC.frame_to_be_available_and_switch_to_it("Left"))
+
+
+        courses_btn = wait.until(
+            EC.presence_of_element_located((By.CSS_SELECTOR,"a[id=SU_65002]"))
+            )
+        courses_btn.click()
+
+        course_evaulation = wait.until(
+            EC.presence_of_element_located((By.XPATH,"//div[@id='SideMenu']//ul[@class='depth2']//a[normalize-space()='Course Evaluation']"))
+        )
+        course_evaulation.click()
+
+        driver.switch_to.default_content()
+        wait.until(EC.frame_to_be_available_and_switch_to_it("Main"))
+
+        wait.until(EC.frame_to_be_available_and_switch_to_it("ifTab"))
+
+
+        grades_table = wait.until(
+            EC.presence_of_element_located((By.ID,'dgList'))
+        )
+
+        table = grades_table.find_elements(By.CSS_SELECTOR, 'tr')
+
+
+
+        result = []
+
+        # result.append([headers.text for headers in table[0].find_elements(By.CSS_SELECTOR,"th")])
+
+
+
+        for t in table[1:]:
+            lst = []
+            for info in t.find_elements(By.TAG_NAME,"td"):
+                lst.append(info.text)
+            result.append(lst)
+
+
+        data = []
+        for j in result:
+            data.append({"subject":j[2],"credit":j[5],"grade":j[6]})
+
+
+        #for getting credits
+        credits = wait.until(
+            EC.presence_of_element_located((By.CSS_SELECTOR,"span[id='lblScore2']"))
+
+        ).text
+
+        gpa_score = wait.until(
+            EC.presence_of_element_located((By.CSS_SELECTOR,"span[id='lblScore3']"))
+        ).text
+
+        final_data = {
+            "status_code":200,
+            "credits":credits,
+            "gpa_score":gpa_score,
+            "table":data
+        }
+        driver.quit()
+
+        return final_data
+
+    except UnexpectedAlertPresentException as e:
+        return {'error':"login or password is incorrect","status_code":int(403)}
+
+import asyncio
+
+selenium_lock = asyncio.Semaphore(1)
 
 async def getting_gpa_dict(studentId: str, password: str):
-    try:
-        async with async_playwright() as p:
-            browser = await p.chromium.launch(
-                headless=True,
-                args=[
-                    "--disable-blink-features=AutomationControlled",
-                    "--lang=en-US,en",
-                ],
-            )
+    async with selenium_lock:
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(
+            None,
+            _selenium_getting_gpa_dict,
+            studentId,
+            password,
+        )
 
-            context = await browser.new_context(
-                locale="en-US",
-                user_agent=(
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/120.0.0.0 Safari/537.36"
-                ),
-            )
-
-            page = await context.new_page()
-
-            # IMPORTANT: handle JS alerts (Selenium did this implicitly)
-            page.on("dialog", lambda dialog: asyncio.create_task(dialog.accept()))
-
-            url = "http://ins.inha.uz/ITIS/Start.aspx"
-            await page.goto(url, timeout=30000)
-
-            # === LOGIN (same as Selenium) ===
-            await page.wait_for_selector("input#txtInhaID", timeout=15000)
-            await page.fill("input#txtInhaID", studentId)
-
-            await page.wait_for_selector("input#txtPW", timeout=15000)
-            await page.fill("input#txtPW", password)
-
-            await page.wait_for_selector("input#btnLogin", timeout=15000)
-            await page.click("input#btnLogin")
-
-            # === WAIT FOR LOGIN SUCCESS ===
-            # Selenium: frame_to_be_available_and_switch_to_it("Left")
-            try:
-                await page.wait_for_selector("frame[name='Left']", timeout=20000)
-            except PlaywrightTimeoutError:
-                raise LoginFailedError()
-
-            # === LEFT FRAME ===
-            left_frame = page.frame(name="Left")
-            if not left_frame:
-                raise LoginFailedError()
-
-            await left_frame.wait_for_selector("a#SU_65002", timeout=15000)
-            await left_frame.click("a#SU_65002")
-
-            await left_frame.wait_for_selector(
-                "//div[@id='SideMenu']//ul[@class='depth2']//a[normalize-space()='Course Evaluation']",
-                timeout=15000,
-            )
-            await left_frame.click(
-                "//div[@id='SideMenu']//ul[@class='depth2']//a[normalize-space()='Course Evaluation']"
-            )
-
-            # === MAIN FRAME ===
-            await page.wait_for_selector("frame[name='Main']", timeout=15000)
-            main_frame = page.frame(name="Main")
-            if not main_frame:
-                raise LoginFailedError()
-
-            await main_frame.wait_for_selector("frame[name='ifTab']", timeout=15000)
-            iftab_frame = main_frame.frame(name="ifTab")
-            if not iftab_frame:
-                raise LoginFailedError()
-
-            # === GRADES TABLE ===
-            await iftab_frame.wait_for_selector("#dgList", timeout=20000)
-            rows = await iftab_frame.query_selector_all("#dgList tr")
-
-            result = []
-            for row in rows[1:]:
-                cols = await row.query_selector_all("td")
-                row_data = [await col.inner_text() for col in cols]
-                result.append(row_data)
-
-            data = []
-            for j in result:
-                data.append(
-                    {
-                        "subject": j[2],
-                        "credit": j[5],
-                        "grade": j[6],
-                    }
-                )
-
-            # === CREDITS & GPA ===
-            credits = await iftab_frame.inner_text("span#lblScore2")
-            gpa_score = await iftab_frame.inner_text("span#lblScore3")
-
-            await browser.close()
-
-            return {
-                "status_code": 200,
-                "credits": credits,
-                "gpa_score": gpa_score,
-                "table": data,
-            }
-
-    except LoginFailedError:
-        return {"error": "login or password is incorrect", "status_code": 403}
-
-    except PlaywrightTimeoutError:
-        return {"error": "login or password is incorrect", "status_code": 403}
-
-    except Exception:
-        return {"error": "login or password is incorrect", "status_code": 403}
