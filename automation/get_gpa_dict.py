@@ -1,138 +1,138 @@
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import UnexpectedAlertPresentException
-
-class LoginFailedError(Exception):
-    pass
-def _selenium_getting_gpa_dict(studentId:str,password:str):
-    
-
-    try:
-        options = webdriver.ChromeOptions()
-      
-        options.add_argument("--headless=new")
-        options.add_argument("--no-sandbox")
-        options.add_argument("--disable-dev-shm-usage")
-        options.add_argument("--disable-gpu")
-        options.add_argument("--lang=en-US,en")
-        options.add_experimental_option("excludeSwitches", ["enable-automation"])
-        options.add_experimental_option("useAutomationExtension", False)
-
-
-
-        driver = webdriver.Chrome(options=options)
-        #for waiting
-        wait = WebDriverWait(driver,30)
-        url = "http://ins.inha.uz/ITIS/Start.aspx"
-
-        driver.get(url)
-
-        input_login_field = wait.until(
-            EC.presence_of_element_located((By.CSS_SELECTOR,'input[id=txtInhaID]'))
-            )
-
-        input_login_field.send_keys(studentId)
-
-        input_password_field = wait.until(
-            EC.presence_of_element_located((By.CSS_SELECTOR,'input[id=txtPW]'))
-            )
-        input_password_field.send_keys(password)
-
-
-        login_btn = wait.until(
-            EC.presence_of_element_located((By.XPATH,"//input[@id='btnLogin']"))
-            )
-        login_btn.click()
-
-
-
-
-
-        driver.switch_to.default_content()
-
-        # 2. Switch to LEFT menu frame
-        wait.until(EC.frame_to_be_available_and_switch_to_it("Left"))
-
-
-        courses_btn = wait.until(
-            EC.presence_of_element_located((By.CSS_SELECTOR,"a[id=SU_65002]"))
-            )
-        courses_btn.click()
-
-        course_evaulation = wait.until(
-            EC.presence_of_element_located((By.XPATH,"//div[@id='SideMenu']//ul[@class='depth2']//a[normalize-space()='Course Evaluation']"))
-        )
-        course_evaulation.click()
-
-        driver.switch_to.default_content()
-        wait.until(EC.frame_to_be_available_and_switch_to_it("Main"))
-
-        wait.until(EC.frame_to_be_available_and_switch_to_it("ifTab"))
-
-
-        grades_table = wait.until(
-            EC.presence_of_element_located((By.ID,'dgList'))
-        )
-
-        table = grades_table.find_elements(By.CSS_SELECTOR, 'tr')
-
-
-
-        result = []
-
-        # result.append([headers.text for headers in table[0].find_elements(By.CSS_SELECTOR,"th")])
-
-
-
-        for t in table[1:]:
-            lst = []
-            for info in t.find_elements(By.TAG_NAME,"td"):
-                lst.append(info.text)
-            result.append(lst)
-
-
-        data = []
-        for j in result:
-            data.append({"subject":j[2],"credit":j[5],"grade":j[6]})
-
-
-        #for getting credits
-        credits = wait.until(
-            EC.presence_of_element_located((By.CSS_SELECTOR,"span[id='lblScore2']"))
-
-        ).text
-
-        gpa_score = wait.until(
-            EC.presence_of_element_located((By.CSS_SELECTOR,"span[id='lblScore3']"))
-        ).text
-
-        final_data = {
-            "status_code":200,
-            "credits":credits,
-            "gpa_score":gpa_score,
-            "table":data
-        }
-        driver.quit()
-
-        return final_data
-
-    except UnexpectedAlertPresentException as e:
-        return {'error':"login or password is incorrect","status_code":int(403)}
-
+import httpx
+from bs4 import BeautifulSoup
+from urllib.parse import urlparse, urlunparse
+from dotenv import load_dotenv
+import os
 import asyncio
 
-selenium_lock = asyncio.Semaphore(1)
+load_dotenv()
 
-async def getting_gpa_dict(studentId: str, password: str):
-    async with selenium_lock:
-        loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(
-            None,
-            _selenium_getting_gpa_dict,
-            studentId,
-            password,
-        )
+# 🔒 GLOBAL CONCURRENCY LIMIT (VERY IMPORTANT)
+SCRAPE_LIMIT = asyncio.Semaphore(5)
 
+def normalize_redirect(location, base_host="ins.inha.uz"):
+    if location.startswith("//"):
+        return "http:" + location.replace("ins.iutdev.ac.kr", base_host)
+    if location.startswith("/"):
+        return f"http://{base_host}{location}"
+    parsed = urlparse(location)
+    return urlunparse(parsed._replace(netloc=base_host))
+
+def is_logged_in(html: str) -> bool:
+    soup = BeautifulSoup(html, "html.parser")
+    title = soup.find("title")
+    if not title:
+        return False
+    return title.text.strip() != "IUT Portal System"
+
+async def get_gpa_by_soup(studentId: str, password: str):
+    async with SCRAPE_LIMIT:
+        try:
+            BASE = os.getenv("BASE")
+            LOGIN_URL = os.getenv("LOGIN_URL")
+            FRAMESET_URL = os.getenv("FRAMESET_URL")
+            TARGET_URL = os.getenv("TARGET_URL")
+
+            USERNAME = studentId
+            PASSWORD = password
+
+            headers = {
+                "User-Agent": "Mozilla/5.0",
+                "Referer": LOGIN_URL,
+                "Content-Type": "application/x-www-form-urlencoded",
+            }
+
+            timeout = httpx.Timeout(10.0)
+            limits = httpx.Limits(
+                max_keepalive_connections=10,
+                max_connections=20,
+            )
+
+            async with httpx.AsyncClient(
+                headers=headers,
+                timeout=timeout,
+                limits=limits,
+                follow_redirects=False,
+            ) as session:
+
+                # 1) Load login page
+                r = await session.get(LOGIN_URL)
+                soup = BeautifulSoup(r.text, "html.parser")
+
+                def hidden(name):
+                    tag = soup.find("input", {"name": name})
+                    return tag["value"] if tag else ""
+
+                payload = {
+                    "__VIEWSTATE": hidden("__VIEWSTATE"),
+                    "__VIEWSTATEGENERATOR": hidden("__VIEWSTATEGENERATOR"),
+                    "__EVENTVALIDATION": hidden("__EVENTVALIDATION"),
+                    "__EVENTTARGET": "",
+                    "__EVENTARGUMENT": "",
+                    "txtInhaID": USERNAME.upper(),
+                    "txtPW": PASSWORD,
+                    "btnLogin": ""
+                }
+
+                # 2) Login
+                r = await session.post(LOGIN_URL, data=payload)
+
+                if not is_logged_in(r.text):
+                    return {
+                        "error": "login or password is incorrect",
+                        "status_code": int(403)
+                    }
+
+                if r.status_code in (301, 302) and "Location" in r.headers:
+                    await session.get(normalize_redirect(r.headers["Location"]))
+
+                # 3) Frameset
+                r = await session.get(FRAMESET_URL)
+                if r.status_code in (301, 302) and "Location" in r.headers:
+                    await session.get(normalize_redirect(r.headers["Location"]))
+
+                # 4) Target page
+                r = await session.get(TARGET_URL)
+                if r.status_code in (301, 302) and "Location" in r.headers:
+                    r = await session.get(normalize_redirect(r.headers["Location"]))
+
+                # 5) Result
+                if "dgList" in r.text:
+                    soup = BeautifulSoup(r.text, "html.parser")
+
+                    data = []
+
+                    credits_aquired = soup.find("span", id="lblScore2").text
+                    gpa_score = soup.find("span", id="lblScore3").text
+
+                    table = soup.find("table", id="dgList")
+                    rows = table.find_all("tr")[1:]
+
+                    for row in rows:
+                        cols = row.find_all("td")
+                        data.append({
+                            "subject": cols[2].text,
+                            "credit": cols[5].text,
+                            "grade": cols[6].text
+                        })
+
+                    return {
+                        "status_code": 200,
+                        "credits": credits_aquired,
+                        "gpa_score": gpa_score,
+                        "table": data
+                    }
+
+                return {
+                    "error": "login or password is incorrect",
+                    "status_code": int(403)
+                }
+
+        except Exception:
+            return {
+                "error": "login or password is incorrect",
+                "status_code": int(403)
+            }
+
+async def getting_gpa_dict(studentId, password):
+    return await get_gpa_by_soup(studentId, password)
