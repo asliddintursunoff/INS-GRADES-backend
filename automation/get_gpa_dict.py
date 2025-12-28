@@ -128,7 +128,8 @@ async def get_gpa_by_soup(studentId: str, password: str):
                     "status_code": int(403)
                 }
 
-        except Exception:
+        except Exception as e:
+            print(e)
             return {
                 "error": "login or password is incorrect",
                 "status_code": int(403)
