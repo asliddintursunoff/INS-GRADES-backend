@@ -31,7 +31,7 @@ celery.conf.beat_schedule = {
     },
     "send-todays-time-table-every-morning":{
         "task": "app.worker.notification_scheduler.send_today_class",
-        "schedule":crontab(hour=22,minute=30,day_of_week="mon-sun")
+        "schedule":crontab(hour=23,minute=40,day_of_week="mon-sun")
     }
 }
 
