@@ -18,16 +18,15 @@ async def is_exists_user(session:user_session,request:UserBase = Depends())->boo
     return await session.is_user_exist(request.telegram_id)
 
 
-
-from fastapi import HTTPException,UploadFile,File
+from fastapi import HTTPException, UploadFile, File
 from sqlalchemy import delete
+from io import TextIOWrapper
 import csv
 
 @router.post("/add-users")
 async def add_users(
     session: db_session,
     file: UploadFile = File(...),
-    
 ):
     # -------------------------------
     # 1️⃣ Validate file
@@ -66,7 +65,9 @@ async def add_users(
             )
             users_to_add.append(user)
 
-        await session.add_all(users_to_add)
+        # ❗ add_all is NOT async
+        session.add_all(users_to_add)
+
         await session.commit()
 
         return {
@@ -76,5 +77,5 @@ async def add_users(
         }
 
     except Exception as e:
-        session.rollback()
+        await session.rollback()
         raise HTTPException(status_code=500, detail=str(e))
