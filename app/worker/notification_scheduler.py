@@ -16,7 +16,7 @@ API_URL = bot_settings.API_URL
 # Initialize Celery
 celery = Celery(
     "notification_tasks",
-    broker=db_settings.REDIS_URL(9), 
+    broker=db_settings.REDIS_DB(9), 
     broker_connection_retry_on=True
 )
 celery.conf.timezone = "Asia/Tashkent"
