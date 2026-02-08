@@ -27,11 +27,11 @@ celery.conf.enable_utc = True
 celery.conf.beat_schedule = {
     "send-class-reminders-every-1-minute": {
         "task": "app.worker.notification_scheduler.send_class_reminders",
-        "schedule": crontab(minute="*/10", hour="9-18",day_of_week="mon-sun"),
+        "schedule": crontab(minute="*/5",day_of_week="mon-sun"),
     },
     "send-todays-time-table-every-morning":{
         "task": "app.worker.notification_scheduler.send_today_class",
-        "schedule":crontab(hour=16,minute=45,day_of_week="mon-sun")
+        "schedule":crontab(hour=22,minute=30,day_of_week="mon-sun")
     }
 }
 
