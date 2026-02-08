@@ -13,8 +13,10 @@ class DataBaseSettings(BaseSettings):
     DB_PASSWORD:str
     DB_NAME:str
 
-    REDIS_HOST:str
-    REDIS_PORT:int
+    # REDIS_HOST:str
+    # REDIS_PORT:int
+
+    REDIS_url:str
 
     model_config  = _base_config
 
@@ -22,8 +24,10 @@ class DataBaseSettings(BaseSettings):
     def DB_URL(self):
         return f"postgresql+asyncpg://{self.DB_USERNAME}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
     
-    def REDIS_URL(self,db):
-        return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/{db}"
+    # def REDIS_URL(self,db):
+    #     return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/{db}"
+    def REDIS_DB(self, db: int) -> str:
+        return f"{self.REDIS_url}/{db}"
 class TelegramBotSettings(BaseSettings):
     BOT_TOKEN:str
     @property
