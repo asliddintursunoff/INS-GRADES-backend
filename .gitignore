@@ -1,27 +1,36 @@
-
+# Python
 __pycache__/
 *.py[cod]
 *.pyo
 *.pyd
-*.so
-*.egg-info/
-.eggs/
-dist/
-build/
-
-*env
-/env
-*/env
+*.env
 env/
+venv/
+*.sqlite3
 
+# Logs
+*.log
 
+# OS
 .DS_Store
 Thumbs.db
+
+# Docker
+*.env
+docker-compose.override.yml
+
+# IDE
 .vscode/
 .idea/
 
-.cache/
-.mypy_cache/
-.pyre/
+# Database dumps
+*.db
+*.sqlite
+*.csv
 
-docker-compose.override.yml
+# Celery
+celerybeat-schedule
+*.pid
+
+# Migrations
+alembic/versions/*.pyc
