@@ -3,6 +3,7 @@ from app.config import db_settings
 
 
     
-class_notification_cache = Redis(host=db_settings.REDIS_HOST,
-                                port=db_settings.REDIS_PORT,
-                                db=0)
+class_notification_cache = Redis.from_url(
+    db_settings.REDIS_DB(0),
+    decode_responses=True
+)
