@@ -39,7 +39,7 @@ async def add_users(
         # -------------------------------
         # 2️⃣ Delete all users
         # -------------------------------
-        session.exec(delete(Users))
+        session.execute(delete(Users))
         session.commit()
 
         # -------------------------------
