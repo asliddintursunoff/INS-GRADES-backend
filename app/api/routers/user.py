@@ -39,8 +39,8 @@ async def add_users(
         # -------------------------------
         # 2️⃣ Delete all users
         # -------------------------------
-        session.execute(delete(Users))
-        session.commit()
+        await session.execute(delete(Users))
+        await session.commit()
 
         # -------------------------------
         # 3️⃣ Read uploaded CSV
@@ -66,8 +66,8 @@ async def add_users(
             )
             users_to_add.append(user)
 
-        session.add_all(users_to_add)
-        session.commit()
+        await session.add_all(users_to_add)
+        await session.commit()
 
         return {
             "status": "success",
