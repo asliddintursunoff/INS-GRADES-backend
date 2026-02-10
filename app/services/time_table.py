@@ -190,24 +190,7 @@ Don’t be late — your future self will thank you 😄"""
 
 
     async def send_todays_time_table_everymorning(self,today):
-        new_message = """
-📢 <b>Great News from Ins Grades!</b> 🎉
-
-Hey student 👋  
-We’ve added <b>new smart features</b> to make your university life easier 📚✨
-
-🎒 <b>What Ins Grades can do for you:</b>
-• 📅 View your timetable anytime  
-• 🌞 <b>Every morning</b> you’ll receive a notification with <i>today’s classes</i>  
-• ⏰ <b>Before every class</b> we’ll notify you <i>30 minutes in advance</i> so you don’t get cooked 😅  
-
-💡 <i>Pro tip:</i>  
-If you ignore the notifications… at least don’t ignore attendance 😄
-
-👉 <b>Please click</b> <code>/start</code> <b>again</b> to activate and enjoy the new features 🚀
-
-— <b>Ins Grades</b> 💚
-"""
+        
 
         stmt  = select(TimeTable).where(TimeTable.week_day == today)
         query = await self.session.execute(stmt)
@@ -224,7 +207,7 @@ If you ignore the notifications… at least don’t ignore attendance 😄
                 message = self.message_format_today_time_table(user,group,today,val)
 
                 await send_message(user.telegram_id,message)
-                await send_message(user.telegram_id,new_message)
+   
         return groups_with_lessons
         
 
