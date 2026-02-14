@@ -24,13 +24,11 @@ class EClassService():
     def __init__(self,session:AsyncSession):
         self.session = session
 
-    async def register_load_data(self,user:User):
-        if user.password == None:
-            return HTTPException(detail="password is not found",status_code=404)
-        
+    async def register_load_data(self,user:User,password:str):
+       
         
         def do_scrape():
-                data = take_info_from_eclass_one_user.delay(user.id)
+                data = take_info_from_eclass_one_user.delay(user.id,password)
                 return data
         try:
             
