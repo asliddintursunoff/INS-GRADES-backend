@@ -156,11 +156,11 @@ class UserService():
             user.password = password
             user.telegram_id = telegram_id
             await self.session.commit()
-            d.register_load_data(user)
+            return await d.register_load_data(user)
 
-            return user
+            
         else:
-            return None
+            raise HTTPException(detail="password is incorrect!\ntry again")
 
         
 
