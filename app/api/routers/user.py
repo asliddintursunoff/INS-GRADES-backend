@@ -29,9 +29,10 @@ async def is_exists_user(session:user_session,request:UserBase = Depends())->boo
     return await session.is_user_exist(request.telegram_id)
 
 
-@router.get("/check-password")
-async def check_password(student_id,session:user_session,password:str)->bool:
-    return await session.register_with_password(student_id,password,session)
+@router.get("/register-user-eclass-and-load-data")
+async def check_password(student_id,session:user_session,password:str,)->bool:
+    if await session.register_with_password(student_id,password):
+        return 
 
 
 

@@ -14,7 +14,7 @@ import pandas as pd
 from app.database.models import Class, Enrollment,Group,User
 from app.api.schema.user import CreateFullUserByCsv
 from app.scraper.script import EclassClient
-
+from app.services.eclass import EClassService
 
 ALLOWED_CONTENT_TYPES = [
     "text/csv",
@@ -143,19 +143,23 @@ class UserService():
         return user
     
 
-    async def register_with_password(self,student_id:str,password:str,session:AsyncSession)->bool:
+    async def register_with_password(self,student_id:str,password:str,e)->bool:
         c = EclassClient()
+        d= EClassService(self.session)
         query = await self.session.execute(select(User).where(User.student_id == student_id))
         user = query.scalar_one_or_none()
+
         result,err = await c.check_credentials(user.student_id,password)
 
         if result:
             user
-            user.password == password
+            user.password = password
             await self.session.commit()
-            return True
+            d.register_load_data(user)
+
+            return user
         else:
-            return False
+            return None
 
         
 

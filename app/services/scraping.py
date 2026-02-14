@@ -744,7 +744,7 @@ class ScrapService:
           
         }
 
-    def scrape_e_class_for_one_user(self,user_id,password:str):
+    def scrape_e_class_for_one_user(self,user_id):
         
         user = self.session.execute(
             select(User).where(User.id==user_id)
@@ -754,7 +754,7 @@ class ScrapService:
             return HTTPException(detail="User not found",status_code=404)
         client = EclassClient()
         try:
-            client.login(user.student_id, password)
+            client.login(user.student_id, user.password)
             rows = client.get_all_attendance()
             final_json = pack_student_rest(user.student_id, rows)
 
