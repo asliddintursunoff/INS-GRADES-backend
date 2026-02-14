@@ -63,7 +63,7 @@ class UserService():
         try:
             data = [CreateFullUserByCsv(**row) for row in data_lst]
 
-            # ✅ wipe old data safely
+            # ✅ wipe old data
             await self.session.execute(delete(Enrollment))
             await self.session.execute(delete(User))
             await self.session.commit()
@@ -76,7 +76,6 @@ class UserService():
                     select(Group).where(Group.group_name == group_name)
                 )
                 group = group_res.scalar_one_or_none()
-
                 if not group:
                     raise HTTPException(422, detail=f"Group not found: {group_name}")
 
@@ -87,12 +86,20 @@ class UserService():
 
                 user = User(**user_data)
                 user.group_id = group.id
-
                 self.session.add(user)
-                await self.session.flush()   # ✅ important in async
+                await self.session.flush()  # ✅ get user.id
 
-                # ✅ creates Enrollment rows automatically via link_model
-                user.classes = classes
+                # ✅ create enrollment rows explicitly (NO lazy loading)
+                for klass in classes:
+                    self.session.add(
+                        Enrollment(
+                            user_id=user.id,
+                            class_id=klass.id,
+                            attendance=None,
+                            absence=None,
+                            late=None,
+                        )
+                    )
 
             await self.session.commit()
             return "successfully updated whole database"
