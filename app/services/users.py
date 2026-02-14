@@ -122,18 +122,18 @@ class UserService():
         user = stmt.scalar_one_or_none()
 
         if not user:
-            return UserType.new_user
+            return {"user_type": UserType.new_user}
 
         if user:
             if not user.password:
-                return UserType.half_user
+                return {"user_type": UserType.half_user}
             if user.password:
-                return UserType.full_user
+                return {"user_type":  UserType.full_user}
             
             if user.eclass_registered == None:
                 user.eclass_registered = datetime.now(ZoneInfo("Asia/Tashkent"))
 
-        
+        return {"user_type": UserType.new_user}
         
 
 
