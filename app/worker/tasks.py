@@ -50,8 +50,8 @@ def take_info_from_eclass():
         session.commit()
 
 @celery.task(name="app.worker.tasks.take_info_from_eclass_one_user")
-def take_info_from_eclass_one_user(user_id,password:str):
+def take_info_from_eclass_one_user(user_id):
     with get_sync_session() as session:
         service = ScrapService(session, is_send=False)
-        service.scrape_e_class_for_one_user(user_id,password)
+        service.scrape_e_class_for_one_user(user_id)
         session.commit()
