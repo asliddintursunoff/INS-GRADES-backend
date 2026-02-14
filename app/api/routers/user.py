@@ -35,6 +35,10 @@ async def check_password(student_id,session:user_session,password:str,telegram_i
     return await session.register_with_password(student_id,password,telegram_id)
          
 
+@router.get("/get-user-info")
+async def get_user_info(session:user_session,telegram_id:str):
+    return await session.get_current_user(telegram_id)
+         
 
 
 
