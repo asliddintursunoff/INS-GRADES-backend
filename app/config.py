@@ -21,13 +21,25 @@ class DataBaseSettings(BaseSettings):
     model_config  = _base_config
 
     @property
-    def DB_URL(self):
+    def ASYNC_DB_URL(self):
         return f"postgresql+asyncpg://{self.DB_USERNAME}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
     
+    
+    @property
+    def SYNC_DB_URL(self) -> str:
+        return (
+            f"postgresql+psycopg2://"
+            f"{self.DB_USERNAME}:{self.DB_PASSWORD}"
+            f"@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
+        )
+
     # def REDIS_URL(self,db):
     #     return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/{db}"
     def REDIS_DB(self, db: int) -> str:
         return f"{self.REDIS_url}/{db}"
+
+
+
 class TelegramBotSettings(BaseSettings):
     BOT_TOKEN:str
     @property
@@ -36,5 +48,15 @@ class TelegramBotSettings(BaseSettings):
 
     model_config = _base_config
 
+
+class ScraperSettings(BaseSettings):
+    base_url: str 
+    login_index_url: str 
+
+
+    model_config = _base_config
+
+
+scraper_settings = ScraperSettings()
 db_settings = DataBaseSettings()
 bot_settings = TelegramBotSettings()

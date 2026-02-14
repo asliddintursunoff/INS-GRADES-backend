@@ -5,7 +5,7 @@ from sqlalchemy.orm import sessionmaker
 from app.config import db_settings
 
 engine = create_async_engine(
-    url=db_settings.DB_URL
+    url=db_settings.ASYNC_DB_URL
 )
 
 async def create_db_tables():

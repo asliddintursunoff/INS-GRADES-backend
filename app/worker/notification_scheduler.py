@@ -6,6 +6,7 @@ from asgiref.sync import async_to_sync
 from app.config import db_settings, bot_settings
 from app.services import users, time_table
 from app.database.session import get_session_ctx,engine
+
 from app.database.models import Weeks
 
 from datetime import datetime, time as dt_time
@@ -17,6 +18,7 @@ API_URL = bot_settings.API_URL
 celery = Celery(
     "notification_tasks",
     broker=db_settings.REDIS_DB(9), 
+    include=["app.worker.tasks"],
     broker_connection_retry_on=True
 )
 celery.conf.timezone = "Asia/Tashkent"
@@ -79,3 +81,5 @@ async def send_today_class_async():
 @celery.task(name = "app.worker.notification_scheduler.send_today_class")
 def send_today_class():
     async_to_sync(send_today_class_async)()
+
+#celery tasks for web scraping
