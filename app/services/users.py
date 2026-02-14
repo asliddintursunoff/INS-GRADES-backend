@@ -2,6 +2,7 @@
 
 
 from datetime import  datetime
+import enum
 from typing import List
 from zoneinfo import ZoneInfo
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,7 +24,11 @@ ALLOWED_CONTENT_TYPES = [
 ALLOWED_EXTENSIONS = ["csv",]
 
 
-
+class UserType(enum.Enum):
+        new_user = "new_user"
+        half_user = "half_user"
+        full_user = "full_user"
+        different_user = "different_user"
 class UserService():
     def __init__(self,session:AsyncSession):
         self.session = session
@@ -109,18 +114,27 @@ class UserService():
         except Exception as e:
             raise HTTPException(detail=str(e), status_code=500)
 
-    async def is_user_exist(self,telegram_id:str)->bool:
+
+    
+    async def user_type(self,telegram_id:str)->UserType:
+
         stmt = await self.session.execute(select(User).where(User.telegram_id ==telegram_id))
         user = stmt.scalar_one_or_none()
 
-        
+        if not user:
+            return UserType.new_user
+
         if user:
+            if not user.password:
+                return UserType.half_user
+            if user.password:
+                return UserType.full_user
+            
             if user.eclass_registered == None:
                 user.eclass_registered = datetime.now(ZoneInfo("Asia/Tashkent"))
-            return True
+
         
-        else:
-            return False
+        
 
 
 

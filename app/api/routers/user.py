@@ -3,6 +3,7 @@ from fastapi import APIRouter,Depends, UploadFile
 
 from app.api.schema.user import CreateUser,UserBase
 from app.api.dependencies import user_session,db_session,current_user
+from app.services.users import UserType
 
 router = APIRouter(tags=["user"],
                    prefix="/user")
@@ -25,8 +26,8 @@ async def register_user(request:CreateUser,session:user_session):
 
 
 @router.get("/is-exist")
-async def is_exists_user(session:user_session,request:UserBase = Depends())->bool:
-    return await session.is_user_exist(request.telegram_id)
+async def is_exists_user(session:user_session,request:UserBase = Depends())->UserType:
+    return await session.user_type(request.telegram_id)
 
 
 @router.get("/register-user-eclass-and-load-data")
