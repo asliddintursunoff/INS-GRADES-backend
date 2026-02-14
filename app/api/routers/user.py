@@ -25,8 +25,8 @@ async def register_user(request:CreateUser,session:user_session):
 
 
 
-@router.get("/is-exist")
-async def is_exists_user(session:user_session,request:UserBase = Depends())->UserType:
+@router.get("/user_type")
+async def is_exists_user(session:user_session,request:UserBase = Depends()):
     return await session.user_type(request.telegram_id)
 
 

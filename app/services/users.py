@@ -116,7 +116,7 @@ class UserService():
 
 
     
-    async def user_type(self,telegram_id:str)->UserType:
+    async def user_type(self,telegram_id:str):
 
         stmt = await self.session.execute(select(User).where(User.telegram_id ==telegram_id))
         user = stmt.scalar_one_or_none()
