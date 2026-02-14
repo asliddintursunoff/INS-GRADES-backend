@@ -294,7 +294,7 @@ class ScrapService:
         subject_label = self._subject_title(data)
 
         # -------------------------
-        # Attendance / Absence / Late (notify on meaningful increase)
+        # Attendance / Absence / Late
         # -------------------------
         att = data.get("attendance") or {}
         new_att = self._safe_int(att.get("attendance"), 0)
@@ -305,26 +305,40 @@ class ScrapService:
         old_abs = db.absence
         old_late = db.late
 
-        # save always
+        # ✅ Detect "first sync" (so you can send at least one message if you want)
+        # If your DB columns are NOT nullable and always 0, set them to NULL in DB
+        # or change this logic to check a separate flag.
+        is_first_sync = (old_att is None and old_abs is None and old_late is None)
+
+        # ✅ Always save latest values
         db.attendance = new_att
         db.absence = new_abs
         db.late = new_late
 
-        def notify_attendance_change(old_abs, new_abs, old_late, new_late, old_att, new_att):
-    # Helper to decide if a field should trigger notify
-            def changed(old: Optional[int], new: int) -> bool:
-                if old is None and new == 0:
-                    return False
-                return (old is None and new > 0) or (old is not None and new > old)
+        def notify_attendance_change(
+            old_abs: Optional[int], new_abs: int,
+            old_late: Optional[int], new_late: int,
+            old_att: Optional[int], new_att: int,
+            first_sync: bool,
+        ):
+            # Helper: notify when increased (your original behavior)
+            def increased(old: Optional[int], new: int) -> bool:
+                if old is None:
+                    return new > 0
+                return new > old
 
-            abs_changed = changed(old_abs, new_abs)
-            late_changed = changed(old_late, new_late)
-            att_changed = changed(old_att, new_att)
+            abs_inc = increased(old_abs, new_abs)
+            late_inc = increased(old_late, new_late)
+            att_inc = increased(old_att, new_att)
 
-            if not (abs_changed or late_changed or att_changed):
+            # ✅ If you want a message on the very first scrape, enable this:
+            # - It will only send if at least one value is > 0
+            first_sync_should_notify = first_sync and (new_att > 0 or new_abs > 0 or new_late > 0)
+
+            if not (abs_inc or late_inc or att_inc or first_sync_should_notify):
                 return
 
-            # One notify key per subject "state" (so you don't spam)
+            # ✅ Dedupe key (includes new values, so it sends once per new state)
             key = f"notify:u:{user.id}:e:{db.id}:att:{data.get('subject')}:{new_att}:{new_abs}:{new_late}"
             if not self._notify_once(key):
                 return
@@ -335,23 +349,23 @@ class ScrapService:
                     return f"{emoji} <b>{label}:</b> <b>{before} → {new}</b>"
                 return f"{emoji} <b>{label}:</b> {before} → {new}"
 
-            # Pick title emoji based on what changed most "serious"
-            header_emoji = "⚠️" if (abs_changed or late_changed) else "✅"
+            header_emoji = "⚠️" if (abs_inc or late_inc) else "✅"
             title = "Attendance Update" if header_emoji == "✅" else "Warning: Attendance Update"
 
             msg = (
                 f"{header_emoji} <b>{title}</b>\n"
                 f"<b>{subject_label}</b>\n\n"
-                f"{fmt_line('Attendance', '✅', old_att, new_att, att_changed)}\n"
-                f"{fmt_line('Absence',    '⚠️', old_abs, new_abs, abs_changed)}\n"
-                f"{fmt_line('Late',       '⏳', old_late, new_late, late_changed)}\n\n"
+                f"{fmt_line('Attendance', '✅', old_att, new_att, att_inc or first_sync_should_notify)}\n"
+                f"{fmt_line('Absence',    '⚠️', old_abs, new_abs, abs_inc or first_sync_should_notify)}\n"
+                f"{fmt_line('Late',       '⏳', old_late, new_late, late_inc or first_sync_should_notify)}\n\n"
                 f"Keep it up 💪"
             )
-
             self._send(user, msg)
 
-        # Call once after you compute old/new:
-        notify_attendance_change(old_abs, new_abs, old_late, new_late, old_att, new_att)
+        # ✅ Call once after computing old/new
+        notify_attendance_change(old_abs, new_abs, old_late, new_late, old_att, new_att, is_first_sync)
+
+    # ... keep the rest of your assignments/quizzes logic below unchanged ...
 
 
         # -------------------------
