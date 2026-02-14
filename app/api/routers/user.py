@@ -30,8 +30,8 @@ async def is_exists_user(session:user_session,request:UserBase = Depends())->boo
 
 
 @router.get("/register-user-eclass-and-load-data")
-async def check_password(student_id,session:user_session,password:str,)->bool:
-    if await session.register_with_password(student_id,password):
+async def check_password(student_id,session:user_session,password:str,telegram_id:str)->bool:
+    if await session.register_with_password(student_id,password,telegram_id):
         return 
 
 

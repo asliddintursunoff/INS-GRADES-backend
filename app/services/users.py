@@ -143,7 +143,7 @@ class UserService():
         return user
     
 
-    async def register_with_password(self,student_id:str,password:str,e)->bool:
+    async def register_with_password(self,student_id:str,password:str,telegram_id:str)->bool:
         c = EclassClient()
         d= EClassService(self.session)
         query = await self.session.execute(select(User).where(User.student_id == student_id))
@@ -154,6 +154,7 @@ class UserService():
         if result:
             user
             user.password = password
+            user.telegram_id = telegram_id
             await self.session.commit()
             d.register_load_data(user)
 
