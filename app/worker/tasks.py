@@ -10,7 +10,7 @@ from app.services.scraping import ScrapService
 # -------------------------
 # Celery app (single instance)
 # -------------------------
-redis=db_settings.REDIS_DB(9)
+redis=db_settings.REDIS_DB(10)
 celery = Celery(
     "notification_tasks",
     broker= redis,   # Railway env
