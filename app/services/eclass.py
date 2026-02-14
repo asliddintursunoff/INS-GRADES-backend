@@ -26,7 +26,7 @@ class EClassService():
 
     async def register_load_data(self,user:User):
         if user.password == None:
-            return HTTPException(detail="password is not found",status_code=404)
+            raise HTTPException(detail="password is not found",status_code=404)
         
         
         def do_scrape():
