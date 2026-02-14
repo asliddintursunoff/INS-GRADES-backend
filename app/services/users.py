@@ -11,7 +11,7 @@ from pydantic_core import ValidationError
 import pandas as pd
 
 
-from app.database.models import Class,Group,User
+from app.database.models import Class, Enrollment,Group,User
 from app.api.schema.user import CreateFullUserByCsv
 from app.scraper.script import EclassClient
 
@@ -50,52 +50,57 @@ class UserService():
             ) 
         return user
 
-    async def adding_subjects_by_csv(self,file:UploadFile)->str:
+    async def adding_subjects_by_csv(self, file: UploadFile) -> str:
         if file.content_type not in ALLOWED_CONTENT_TYPES:
-            raise HTTPException(detail="File type not allowed. Allowed only for .csv!",status_code=400)
-    
-        if file.filename.split('.')[-1].lower() not in ALLOWED_EXTENSIONS:
-            raise HTTPException(detail="File type not allowed. Allowed only for .csv!",status_code=400)
-        
+            raise HTTPException(detail="File type not allowed. Allowed only for .csv!", status_code=400)
+
+        if file.filename.split(".")[-1].lower() not in ALLOWED_EXTENSIONS:
+            raise HTTPException(detail="File type not allowed. Allowed only for .csv!", status_code=400)
+
         df = pd.read_csv(file.file)
-        data_lst =  df.to_dict(orient="records")
-        
-        
+        data_lst = df.to_dict(orient="records")
+
         try:
-            data = [CreateFullUserByCsv(**row)  for row in data_lst]
-            
-            stmp = delete(User)
-            await self.session.execute(stmp)
-            
+            data = [CreateFullUserByCsv(**row) for row in data_lst]
+
+            # ✅ wipe old data safely
+            await self.session.execute(delete(Enrollment))
+            await self.session.execute(delete(User))
+            await self.session.commit()
+
             for i in data:
-                
                 user_data = i.model_dump()
                 group_name = user_data.pop("group_name")
 
-                group_res = await self.session.execute(select(Group).where(Group.group_name == group_name))
+                group_res = await self.session.execute(
+                    select(Group).where(Group.group_name == group_name)
+                )
                 group = group_res.scalar_one_or_none()
-                
+
                 if not group:
                     raise HTTPException(422, detail=f"Group not found: {group_name}")
 
                 stmt = await self.session.execute(
-                    select(Class).where(Class.group_id == group.id))
+                    select(Class).where(Class.group_id == group.id)
+                )
                 classes = stmt.scalars().all()
-                
-                user =User(**user_data)
-                user.classes = classes
-                user.group_id = group.id
-                self.session.add(user)
-                
-            await self.session.commit()
 
+                user = User(**user_data)
+                user.group_id = group.id
+
+                self.session.add(user)
+                await self.session.flush()   # ✅ important in async
+
+                # ✅ creates Enrollment rows automatically via link_model
+                user.classes = classes
+
+            await self.session.commit()
             return "successfully updated whole database"
 
         except ValidationError as e:
-            raise HTTPException(detail=str(e),status_code=422)
+            raise HTTPException(detail=str(e), status_code=422)
         except Exception as e:
-            raise HTTPException(detail = str(e),status_code=500)
-        
+            raise HTTPException(detail=str(e), status_code=500)
 
     async def is_user_exist(self,telegram_id:str)->bool:
         stmt = await self.session.execute(select(User).where(User.telegram_id ==telegram_id))
