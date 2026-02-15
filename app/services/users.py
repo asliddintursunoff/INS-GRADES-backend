@@ -117,25 +117,20 @@ class UserService():
 
     
     async def user_type(self, telegram_id: str):
-        stmt = await self.session.execute(
-            select(User).where(User.telegram_id == telegram_id)
-        )
+        stmt = await self.session.execute(select(User).where(User.telegram_id == telegram_id))
         user = stmt.scalar_one_or_none()
 
         if not user:
             return {"user_type": UserType.new_user}
 
-        # mark as started
         user.is_started = True
 
-        # Half user: telegram exists but password not set
         if user.password is None:
             await self.session.commit()
             return {"user_type": UserType.half_user}
 
-        # Full user: password exists
         if user.eclass_registered is None:
-            user.eclass_registered = datetime.now(ZoneInfo("Asia/Tashkent"))
+            user.eclass_registered = datetime.now(ZoneInfo("Asia/Tashkent")).replace(tzinfo=None)
 
         await self.session.commit()
         return {"user_type": UserType.full_user}
