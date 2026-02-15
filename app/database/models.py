@@ -204,7 +204,7 @@ class User(SQLModel, table=True):
     is_subscribed: bool = Field(default=False)
     subscribtion_started: datetime | None = None
     subscribtion_end: datetime | None = None
-    is_started: bool
+    is_started: bool = False
     started_date: datetime | None = None
     eclass_registered: datetime |None = None
 

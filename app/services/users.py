@@ -125,13 +125,16 @@ class UserService():
             return {"user_type": UserType.new_user}
 
         if user:
+            user.is_started = True
             if not user.password:
                 return {"user_type": UserType.half_user}
-            if user.password:
-                return {"user_type":  UserType.full_user}
             
             if user.eclass_registered == None:
                 user.eclass_registered = datetime.now(ZoneInfo("Asia/Tashkent"))
+
+            if user.password:          
+                return {"user_type":  UserType.full_user}
+
 
         return {"user_type": UserType.new_user}
         

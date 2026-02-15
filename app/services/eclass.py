@@ -41,12 +41,26 @@ class EClassService():
 
             
                 return {
-                    "detail":"It is your first time using bot or sesson expired\nSo, We are setting up your data!\nIt might take up to 1 minute\nPlease be paint"
-                }
-            return {
-                "detail":f"why don't you understand {user.first_name} I said PLEASE wait!"
+                "detail": (
+                    "⏳ <b>We’re preparing your data…</b>\n\n"
+                    "It looks like this is your first time using the bot or your session has expired.\n"
+                    "We are now setting up your E-class information.\n\n"
+                    "🕒 This may take <b>1–15 minutes</b>.\n"
+                    "Please come back after about <b>15 minutes</b>.\n\n"
+                    "🔔 We will send you a notification once everything is ready."
+                )
             }
-            
+
+            return {
+                "detail": (
+                    f"⏳ <b>Please wait, {user.first_name}…</b>\n\n"
+                    "Your data setup is already in progress.\n"
+                    "It may take up to <b>15 minutes</b>.\n\n"
+                    "🔔 You will receive a notification as soon as everything is ready."
+                )
+            }
+
+
   
         except LoginFailed as e:
            
@@ -76,6 +90,7 @@ class EClassService():
         if not info:
             return HTTPException(status_code=403,detail="User is not found\nCauses from:deleted by user or session expired.\nPlease register again click /start")
         
+
         await redis_user_info_cache_async.set(str(user.id), json.dumps(info.payload),  ex=60*60*120)
 
         return info.payload

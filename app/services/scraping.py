@@ -702,6 +702,7 @@ class ScrapService:
                     self.session.add(snap)
 
                 self.session.commit()
+                
                         
             except (LoginFailed, AuthExpired, BlockedOrForbidden) as e:
                 # ✅ disable this user for future scraping: clear password
@@ -736,6 +737,27 @@ class ScrapService:
                     "error": str(e)
                 })
                 continue
+            finally:
+                message = (
+                    "🚀 <b>New E-class Features in INS Grades!</b>\n\n"
+                    "We made your E-class experience even better ✨\n\n"
+                    "🔔 <b>Smart Assignment Reminders (on E-class)</b>\n"
+                    "• Get alerts 5 days, 3 days, and 1 day before deadline\n"
+                    "• Get a final reminder on the due day\n\n"
+                    "📊 <b>Attendance Alerts (from E-class)</b>\n"
+                    "• Get a message if you are absent or late\n"
+                    "• See your attendance clearly for each subject\n\n"
+                    "🧾 <b>Grades & Quiz Updates (on E-class)</b>\n"
+                    "• Get notified when grades are published\n"
+                    "• Stay updated about quizzes\n\n"
+                    "📅 <b>Daily Class Plan</b>\n"
+                    "• Get today’s classes every morning at 08:00\n"
+                    "• Get a reminder 30 minutes before each class\n\n"
+                    "Everything is <b>free</b> for you 💙\n"
+                    "Click <b>/start</b> and enjoy the new features!"
+                )
+
+                send_message(user.telegram_id,message)
 
         return {
       
@@ -798,7 +820,15 @@ class ScrapService:
                 self.session.add(snap)
 
             self.session.commit()
-            send_message(user_telegram_id=user.telegram_id,message="We are done please click /start")
+            send_message(
+                user_telegram_id=user.telegram_id,
+                message=(
+                    "🎉 <b>Great news!</b>\n\n"
+                    "Everything is ready for you.\n"
+                    "Click <b>/start</b> to access your dashboard and features."
+                )
+            )
+
             redis_registered_users_sync.delete(str(user.id))
             return final_json
         
