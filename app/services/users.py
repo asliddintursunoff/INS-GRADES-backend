@@ -135,6 +135,7 @@ class UserService():
             if user.password:          
                 return {"user_type":  UserType.full_user}
 
+            self.session.commit()
 
         return {"user_type": UserType.new_user}
         
