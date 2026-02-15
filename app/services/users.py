@@ -127,15 +127,17 @@ class UserService():
         if user:
             user.is_started = True
             if not user.password:
+                await self.session.commit()
                 return {"user_type": UserType.half_user}
             
             if user.eclass_registered == None:
                 user.eclass_registered = datetime.now(ZoneInfo("Asia/Tashkent"))
 
+            
+
+            await self.session.commit()
             if user.password:          
                 return {"user_type":  UserType.full_user}
-
-            self.session.commit()
 
         return {"user_type": UserType.new_user}
         
