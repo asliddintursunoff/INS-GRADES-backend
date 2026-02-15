@@ -116,32 +116,29 @@ class UserService():
 
 
     
-    async def user_type(self,telegram_id:str):
-
-        stmt = await self.session.execute(select(User).where(User.telegram_id ==telegram_id))
+    async def user_type(self, telegram_id: str):
+        stmt = await self.session.execute(
+            select(User).where(User.telegram_id == telegram_id)
+        )
         user = stmt.scalar_one_or_none()
 
         if not user:
             return {"user_type": UserType.new_user}
 
-        if user:
-            user.is_started = True
-            if not user.password:
-                await self.session.commit()
-                return {"user_type": UserType.half_user}
-            
-            if user.eclass_registered == None:
-                user.eclass_registered = datetime.now(ZoneInfo("Asia/Tashkent"))
+        # mark as started
+        user.is_started = True
 
-            
-
+        # Half user: telegram exists but password not set
+        if user.password is None:
             await self.session.commit()
-            if user.password:          
-                return {"user_type":  UserType.full_user}
+            return {"user_type": UserType.half_user}
 
-        return {"user_type": UserType.new_user}
-        
+        # Full user: password exists
+        if user.eclass_registered is None:
+            user.eclass_registered = datetime.now(ZoneInfo("Asia/Tashkent"))
 
+        await self.session.commit()
+        return {"user_type": UserType.full_user}
 
 
     async def register_by_student_id(self,student_id:str,telegram_id:str)->User:
