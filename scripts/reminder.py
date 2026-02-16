@@ -273,7 +273,7 @@ def run_daily_8am():
                 continue
 
             payload_map = get_user_payload_map(user_id)
-            first_name = payload_map["first_name"] or items[0][9]
+            first_name = payload_map["first_name"] or "there"
             subjects_by_code = payload_map["subjects_by_code"]
 
             items.sort(key=lambda x: x[0])  # sort by start_time
