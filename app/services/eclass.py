@@ -46,7 +46,7 @@ class EClassService():
                     "It looks like this is your first time using the bot or your session has expired.\n"
                     "We are now setting up your E-class information.\n\n"
                     "🕒 This may take <b>1–15 minutes</b>.\n"
-                    "Please come back after about <b>15 minutes</b>.\n\n"
+                    
                     "🔔 We will send you a notification once everything is ready."
                 )
             }
