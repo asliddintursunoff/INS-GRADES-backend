@@ -298,7 +298,7 @@ class SuperUser(SQLModel,table = True):
     last_name:str
     username:str = Field(index=True,unique=True)
     hashed_password:str
-    telegram_id:str
+    telegram_id:str|None = None
     is_root:bool = Column(Boolean, default=False, nullable=False)
 
     

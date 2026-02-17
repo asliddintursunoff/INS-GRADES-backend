@@ -76,7 +76,7 @@ class GroupType(str, enum.Enum):
 
 
 @router.post("/register",status_code=201)
-async def register(super_user:is_root,data:SuperUserCreate,session:super_user_session):
+async def register(data:SuperUserCreate,session:super_user_session):
     await session.create_super_user(
         **data.model_dump()
     )
