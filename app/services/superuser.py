@@ -42,7 +42,7 @@ class SuperUserService():
             return None
         except IntegrityError as e:
             await self.session.rollback()
-            raise HTTPException(detail="Username already exists!",status_code=409)
+            raise HTTPException(detail="Username already exists!"+str(e),status_code=409)
 
 
     async def authenticate_user(self,username:str,password:str)->SuperUser:
@@ -188,7 +188,9 @@ class SuperUserService():
             select(User, Group)
             .join(Group, Group.id == User.group_id)
             .where(Group.id.in_(group_ids))
+            .where(User.telegram_id.isnot(None))   # ← add this line
         )
+
         user_rows = res_users.all()  # (User, Group)
 
         if not user_rows:
