@@ -56,7 +56,17 @@ class ScraperSettings(BaseSettings):
 
     model_config = _base_config
 
+class JWTSettings(BaseSettings):
+    ALGORITHM:str
+    SECRET_KEY:str
+    ACCESS_TOKEN_EXPIRE_MINUTES:int
+
+    model_config = _base_config
+
+
 
 scraper_settings = ScraperSettings()
 db_settings = DataBaseSettings()
 bot_settings = TelegramBotSettings()
+jwt_settins= JWTSettings()
+

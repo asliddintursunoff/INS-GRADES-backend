@@ -1,4 +1,4 @@
-from sqlmodel import ForeignKey, SQLModel, Field, Column, Relationship
+from sqlmodel import Boolean, ForeignKey, SQLModel, Field, Column, Relationship
 from sqlalchemy.dialects import postgresql
 from sqlalchemy import UniqueConstraint
 
@@ -284,3 +284,21 @@ class EclassSnapshot(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     user_id: UUID = Field(index=True, unique=True)
     payload: dict = Field(sa_column=Column(postgresql.JSONB, nullable=False))
+
+
+class SuperUser(SQLModel,table = True):
+    id:UUID = Field(
+        sa_column=Column(
+            postgresql.UUID,
+            default = uuid4,
+            primary_key=True
+        )
+    )
+    first_name :str
+    last_name:str
+    username:str = Field(index=True,unique=True)
+    hashed_password:str
+    telegram_id:str
+    is_root:bool = Column(Boolean, default=False, nullable=False)
+
+    

@@ -1,4 +1,6 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
 from rich import panel,print
 from .database.session import create_db_tables
 from app.api.router import master_router
@@ -13,6 +15,24 @@ app = FastAPI(
     lifespan=life_cycle,
     
 )
-
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+class NgrokSkipBrowserWarningMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers["ngrok-skip-browser-warning"] = "true"
+        return response
+    
+app.add_middleware(NgrokSkipBrowserWarningMiddleware)
+origins = [
+    "*" 
+]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins =origins,
+    # allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"]
+)
 app.include_router(master_router)
 
