@@ -42,7 +42,7 @@ class SuperUserService():
             return None
         except IntegrityError as e:
             await self.session.rollback()
-            raise HTTPException(detail="Username already exists!"+str(e),status_code=409)
+            raise HTTPException(detail="Username already exists!",status_code=409)
 
 
     async def authenticate_user(self,username:str,password:str)->SuperUser:
