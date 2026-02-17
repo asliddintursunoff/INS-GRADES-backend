@@ -96,7 +96,7 @@ class SuperUserService():
             raise HTTPException(detail="You can not delete your self",status_code=400)
         
         try:
-            self.session.delete(user)          
+            await self.session.delete(user)          
             await self.session.commit()     
             return {"ok": "success"}
         except IntegrityError as e:
