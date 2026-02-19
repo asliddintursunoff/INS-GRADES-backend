@@ -29,7 +29,7 @@ class SubjectOUT(BaseModel):
 
 
 
-class MajorBase(BaseModel):
+class MajorOUT(BaseModel):
     id:UUID 
     major_name:str
     major_full_name:str|None = None

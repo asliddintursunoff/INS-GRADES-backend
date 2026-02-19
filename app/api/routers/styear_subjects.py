@@ -1,7 +1,7 @@
 from typing import List
 from uuid import UUID
 from app.api.dependencies import st_year_session,is_root,current_super_user
-from app.api.schema.styear import StYearBase,StYearOUT,SubjectOUT,MajorBase
+from app.api.schema.styear import StYearBase,StYearOUT,SubjectOUT,MajorOUT
 
 from fastapi import APIRouter, Query
 
@@ -28,7 +28,7 @@ async def get_subjects_by_st_year(session:st_year_session,super_user_required:cu
 
 
 
-@router.get("/majors",response_model=List[MajorBase])
+@router.get("/majors",response_model=List[MajorOUT])
 async def get_majors(session:st_year_session,super_user_required:current_super_user):
     return await session.get_majors()
 
