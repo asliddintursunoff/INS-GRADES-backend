@@ -17,7 +17,7 @@ from app.services.eclass import EClassService
 from app.services.admin_panel.superuser import SuperUser,SuperUserService
 from app.services.admin_panel.studentyear_subjects import StYearService
 from app.services.admin_panel.user_attendance import UserAttendanceService
-
+from app.services.admin_panel.notifiaction_attendance import NotificationAttendanceService
 
 
 db_session = Annotated[AsyncSession,Depends(get_session)]
@@ -150,3 +150,10 @@ async def get_user_attendance_session(session:db_session):
     return  UserAttendanceService(session)
 
 user_attendance_session = Annotated[UserAttendanceService,Depends(get_user_attendance_session)]
+
+
+
+async def get_attendance_notification_service(session:db_session):
+    return NotificationAttendanceService(session)
+
+notification_session = Annotated[NotificationAttendanceService,Depends(get_attendance_notification_service)]

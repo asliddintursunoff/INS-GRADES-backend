@@ -1,8 +1,14 @@
+# app/api/schema/user_attendance.py
+
+from __future__ import annotations
 
 from datetime import date
-from pydantic import BaseModel
-from typing import Optional,List
+from typing import List, Optional
 from uuid import UUID
+
+from pydantic import BaseModel
+
+
 class EnrollmentMiniOut(BaseModel):
     id: UUID
     attendance: Optional[int] = None
@@ -20,7 +26,7 @@ class StudentAttendanceOut(BaseModel):
 
 class AttendanceInfoOut(BaseModel):
     id: UUID
-    date_of_week: "date"
+    date_of_week: date
     class_name: Optional[str] = None
     attendance: bool
     absence: bool
@@ -32,7 +38,7 @@ class EnrollmentWithInfoOut(BaseModel):
     attendance: Optional[int] = None
     late: Optional[int] = None
     absence: Optional[int] = None
-    exact_info: List[AttendanceInfoOut]|None 
+    exact_info: Optional[List[AttendanceInfoOut]] = None
 
 
 class OneStudentEnrollmentOut(BaseModel):
@@ -42,3 +48,25 @@ class OneStudentEnrollmentOut(BaseModel):
     phone: Optional[str] = None
     enrollments: List[EnrollmentWithInfoOut]
 
+
+class SubjectMetaOut(BaseModel):
+    subject_id: UUID
+    subject_name: str
+
+
+class SubjectMetaWithProfessorsOut(SubjectMetaOut):
+    professors: List[str] = []
+
+
+class SubjectMetaWithProfessorOut(SubjectMetaOut):
+    professor_name: str
+
+
+class StudentsBySubjectResponse(BaseModel):
+    subject: SubjectMetaWithProfessorsOut
+    students: List[StudentAttendanceOut]
+
+
+class OneStudentEnrollmentResponse(BaseModel):
+    subject: SubjectMetaWithProfessorOut
+    student: OneStudentEnrollmentOut

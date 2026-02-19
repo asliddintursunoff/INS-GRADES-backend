@@ -41,7 +41,7 @@ class Token(BaseModel):
     token_type:str
 router = APIRouter(
     prefix="/superuser",
-    tags=["Super User"]
+    tags=["ADMIN PANEL - Super User"]
 )
 
 
@@ -76,7 +76,7 @@ class GroupType(str, enum.Enum):
 
 
 @router.post("/register",status_code=201)
-async def register(data:SuperUserCreate,session:super_user_session):
+async def register(data:SuperUserCreate,session:super_user_session,root_required:is_root):
     await session.create_super_user(
         **data.model_dump()
     )

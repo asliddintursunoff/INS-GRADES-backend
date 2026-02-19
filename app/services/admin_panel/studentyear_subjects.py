@@ -18,6 +18,11 @@ class StYearService():
         result = stmt.scalars().all()
 
         return result
+    async def get_majors(self):
+        stmt = await self.session.execute(
+            select(Major)
+        )
+        return stmt.scalars().all()
     
     async def get_subjects_by_styear_id(self, sty_id: UUID) -> List[SubjectOUT]:
         stmt = await self.session.execute(

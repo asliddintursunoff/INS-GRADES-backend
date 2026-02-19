@@ -64,6 +64,7 @@ class Major(SQLModel,table=True):
     subjects:List['Subject'] = Relationship(back_populates="majors",
                                             link_model=SubjectMajorLink,
                                             sa_relationship_kwargs={"lazy": "selectin"},)
+    groups:List["Group"] = Relationship(back_populates="major",sa_relationship_kwargs={"lazy":"selectin"})
 
 
 class Subject(SQLModel, table=True):
@@ -114,6 +115,10 @@ class Group(SQLModel, table=True):
         ),
     )
     group_name: str = Field(unique=True, index=True)
+
+    major_id:UUID = Field(foreign_key="major.id",nullable=True)
+
+    major:Major = Relationship(back_populates="groups",sa_relationship_kwargs={"lazy":"selectin"})
 
     classes: List["Class"] = Relationship(back_populates="group")
     users: List["User"] = Relationship(back_populates="group")

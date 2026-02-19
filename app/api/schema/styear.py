@@ -26,3 +26,10 @@ class SubjectOUT(BaseModel):
     
     majors:List[MajorBase]
     professors:List[Professors]
+
+
+
+class MajorBase(BaseModel):
+    id:UUID 
+    major_name:str
+    major_full_name:str|None = None
