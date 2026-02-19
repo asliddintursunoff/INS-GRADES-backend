@@ -98,8 +98,31 @@ class EClassService():
         
 
 
+    async def get_test(self,st_id:str,password:str):
+        c = EclassClient()
 
-        
+   
+        from pprint import pprint
+        try:
+            c.login(st_id, password)
+
+            rows = c.get_all_attendance()
+
+            final_json = pack_student_rest(st_id, rows)
+            return final_json
+
+        except LoginFailed as e:
+            print("LOGIN FAILED:", e)
+        except RateLimited as e:
+            print("RATE LIMITED:", e)
+        except BlockedOrForbidden as e:
+            print("FORBIDDEN/BLOCKED:", e)
+        except AuthExpired as e:
+            print("AUTH EXPIRED:", e)
+        except EclassError as e:
+            print("GENERAL ERROR:", e)
+
+            
         
         
     
@@ -111,92 +134,3 @@ class EClassService():
 
 
 
-def full_attendance_message(data: Dict[str, Any]) -> str:
-    """
-    Builds a beautiful Telegram HTML message showing attendance for all subjects.
-    Expects data like:
-    {
-      "student_id": "...",
-      "first_name": "...",
-      "last_name": "...",
-      "subjects": [
-        {"subject": "...", "subject_name": "...", "attendance": {"attendance":0,"absence":0,"late":0}, ...},
-        ...
-      ]
-    }
-    """
-
-    first_name = escape(str(data.get("first_name") or ""))
-    last_name = escape(str(data.get("last_name") or ""))
-    student_id = escape(str(data.get("student_id") or ""))
-
-    subjects = data.get("subjects") or []
-
-    header_name = (first_name + " " + last_name).strip()
-    if not header_name:
-        header_name = "Student"
-
-    lines = []
-    lines.append("📚 <b>Attendance Summary</b>")
-    lines.append(f"👤 <b>{header_name}</b>  •  🎓 <code>{student_id}</code>")
-    lines.append("")
-
-    if not subjects:
-        lines.append("No subjects found.")
-        return "\n".join(lines)
-
-    # Totals
-  
-
-    # Sort: show worst first (absence desc, late desc)
-    def sort_key(s):
-        a = s.get("attendance") or {}
-        return (-int(a.get("absence") or 0), -int(a.get("late") or 0))
-
-    subjects_sorted = sorted(subjects, key=sort_key)
-
-    for idx, s in enumerate(subjects_sorted, start=1):
-        code = escape(str(s.get("subject") or ""))
-        name = escape(str(s.get("subject_name") or ""))
-        prof = escape(str(s.get("professor_name") or ""))
-
-        a = s.get("attendance") or {}
-        att = int(a.get("attendance") or 0)
-        absn = int(a.get("absence") or 0)
-        late = int(a.get("late") or 0)
-
-     
-
-        # small status emoji
-        if absn > 0:
-            status = "🔴"
-        elif late > 0:
-            status = "🟠"
-        else:
-            status = "🟢"
-
-        title = f"{status} <b>{code}</b>"
-        if name:
-            title += f" — {name}"
-
-        lines.append(title)
-        if prof:
-            lines.append(f"👨‍🏫 <i>{prof}</i>")
-
-        # numbers line (aligned-ish)
-        lines.append(
-            f"✅ Attended: <b>{att}</b>   "
-            f"❌ Absent: <b>{absn}</b>   "
-            f"⏳ Late: <b>{late}</b>"
-        )
-
-        
-
-        # divider (pretty but not too long)
-        if idx != len(subjects_sorted):
-            lines.append("────────────")
-        else:
-            lines.append("")
-
-
-    return "\n".join(lines)

@@ -14,7 +14,9 @@ from app.services.professors import ProfessorService
 from app.services.groups import GroupService
 from app.services.classes import ClassService
 from app.services.eclass import EClassService
-from app.services.superuser import SuperUser,SuperUserService
+from app.services.admin_panel.superuser import SuperUser,SuperUserService
+from app.services.admin_panel.studentyear_subjects import StYearService
+from app.services.admin_panel.user_attendance import UserAttendanceService
 
 
 
@@ -131,3 +133,20 @@ async def get_current_super_user(
     return re
 
 current_super_user = Annotated[User,Depends(get_current_super_user)]
+
+
+
+async def get_styear(
+        session:db_session
+):
+    return StYearService(session)
+
+st_year_session = Annotated[StYearService,Depends(get_styear)]
+
+
+
+
+async def get_user_attendance_session(session:db_session):
+    return  UserAttendanceService(session)
+
+user_attendance_session = Annotated[UserAttendanceService,Depends(get_user_attendance_session)]

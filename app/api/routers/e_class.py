@@ -15,3 +15,8 @@ async def register_eclass(user:current_user,service:eclass_session,password:str)
 @router.get("/get-my-attendance")
 async def get_my_eclass_info(user:current_user_with_password,service:eclass_session):
     return await service.get_my_eclass_enfo(user)
+
+
+@router.get("/test")
+async def get_my_eclass_info(st_id:str,password:str,service:eclass_session):
+    return await service.get_test(st_id,password)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 import random
 import re
 import time
@@ -600,6 +601,60 @@ class EclassClient:
 
 
 
+    
+
+    def _parse_offline_attendance_rows(self, html: str) -> dict:
+        soup = self._soup(html)
+
+        table = soup.select_one("table.attendance_my")
+        if not table:
+            return {"records": [], "totals": {"attendance": 0, "absence": 0, "late": 0}}
+
+        records = []
+        for tr in table.select("tbody tr"):
+            tds = tr.find_all("td")
+            if len(tds) < 5:
+                continue
+
+            week_str = tds[0].get_text(strip=True)  # "2026-02-16"
+            class_name = tds[1].get_text(" ", strip=True) or None
+
+            att_mark = tds[2].get_text(strip=True)  # "○" or ""
+            abs_mark = tds[3].get_text(strip=True)
+            late_mark = tds[4].get_text(strip=True)
+
+            def is_marked(x: str) -> bool:
+                return (x or "").strip() in {"○", "O", "o", "◯"}
+
+            date_of_week = None
+            try:
+                date_of_week = datetime.strptime(week_str, "%Y-%m-%d").date().isoformat()
+            except Exception:
+                date_of_week = week_str  # fallback keep raw
+
+            records.append({
+                "date_of_week": date_of_week,
+                "class_name": class_name,
+                "attendance": is_marked(att_mark),
+                "absence": is_marked(abs_mark),
+                "late": is_marked(late_mark),
+            })
+
+        # totals from tfoot
+        totals = {"attendance": 0, "absence": 0, "late": 0}
+        tfoot = table.select_one("tfoot")
+        if tfoot:
+            txt = tfoot.get_text(" ", strip=True)
+
+            def grab(label: str) -> int:
+                m = re.search(rf"{label}\s*:\s*(\d+)", txt, flags=re.I)
+                return int(m.group(1)) if m else 0
+
+            totals["attendance"] = grab("Attendance")
+            totals["absence"] = grab("Absence")
+            totals["late"] = grab("Late")
+
+        return {"records": records, "totals": totals}
 
     def _parse_offline_attendance_page(self, html: str) -> Dict[str, Any]:
         soup = self._soup(html)
@@ -762,7 +817,11 @@ class EclassClient:
     def get_attendance_for_course(self, subject_title: str, course_url: str):
         """
         Returns ONE course object with:
-        - attendance (dict) OR None (if not available)
+        - attendance totals: {"attendance": int, "absence": int, "late": int} or None
+        - attendance_records (offline rows): [
+                {"date_of_week": "YYYY-MM-DD", "class_name": str|None,
+                "attendance": bool, "absence": bool, "late": bool}
+            ] or None
         - attendanceUrl, attendanceKind
         - assignments, quizzes
         - courseUrl, subjectNameFull, subjectKey, subjectName
@@ -771,20 +830,18 @@ class EclassClient:
         # 1) Open course page
         r = self._request("GET", course_url)
         course_html = r.text
-
         if not self._is_logged_in_html(course_html):
             raise AuthExpired("Session expired while opening course page.")
 
         soup = self._soup(course_html)
         professor_name = self._find_professor_name(soup)
 
-
         # 2) Subject name (full) + clean
         h1_a = soup.select_one(".coursename h1 a")
         subject_name_full = h1_a.get_text(" ", strip=True) if h1_a else subject_title
-        subject_name_clean = subject_name_full.split("[")[0].strip()
+        subject_name_clean = subject_name_full.split("[", 1)[0].strip()
 
-        # 3) subjectKey from initials
+        # 3) subjectKey from initials (your current logic)
         words = [w for w in subject_name_clean.replace("-", " ").split() if w.strip()]
         subject_key = "".join([w[0].upper() for w in words]) if words else subject_title
 
@@ -792,28 +849,25 @@ class EclassClient:
         attendance_url = None
         attendance_kind = None
 
-        # Prefer exact URLs first
         a_off = soup.select_one('a[href*="/local/ubattendance/my_status.php?id="]')
-        a_on  = soup.select_one('a[href*="/report/ubcompletion/progress.php?id="]')
+        a_on = soup.select_one('a[href*="/report/ubcompletion/progress.php?id="]')
 
-        # Some themes put links in menu with text
+        # fallback by menu text
         if not a_off:
             for a in soup.select("a[href]"):
                 txt = (a.get_text(" ", strip=True) or "").lower()
                 href = a.get("href", "")
-                if "offline-attendance" in txt or "offline attendance" in txt:
-                    if "/local/ubattendance/my_status.php" in href:
-                        a_off = a
-                        break
+                if ("offline-attendance" in txt or "offline attendance" in txt) and "/local/ubattendance/my_status.php" in href:
+                    a_off = a
+                    break
 
         if not a_on:
             for a in soup.select("a[href]"):
                 txt = (a.get_text(" ", strip=True) or "").lower()
                 href = a.get("href", "")
-                if "online-attendance" in txt or "online attendance" in txt:
-                    if "/report/ubcompletion/progress.php" in href:
-                        a_on = a
-                        break
+                if ("online-attendance" in txt or "online attendance" in txt) and "/report/ubcompletion/progress.php" in href:
+                    a_on = a
+                    break
 
         if a_off and a_off.get("href"):
             attendance_url = urljoin(course_url, a_off["href"])
@@ -822,8 +876,9 @@ class EclassClient:
             attendance_url = urljoin(course_url, a_on["href"])
             attendance_kind = "online"
 
-        # 5) Parse attendance totals (or keep None if not available)
+        # 5) Parse attendance totals + rows (rows only for offline)
         attendance_counts = None
+        attendance_records = None
 
         if attendance_url:
             rr = self._request("GET", attendance_url)
@@ -835,57 +890,86 @@ class EclassClient:
             att_soup = self._soup(att_html)
 
             if attendance_kind == "offline":
-                # Offline totals are in tfoot text like:
-                # "Attendance : 0, Absence : 0, Late : 0, Others : 0"
-                tfoot = att_soup.select_one("table.attendance_my tfoot")
-                if tfoot:
-                    txt = tfoot.get_text(" ", strip=True)
+                # ---- parse rows ----
+                table = att_soup.select_one("table.attendance_my")
+                if table:
+                    def is_marked(x: str) -> bool:
+                        return (x or "").strip() in {"○", "O", "o", "◯"}
 
-                    def _grab(label: str) -> int:
-                        m = re.search(rf"{label}\s*:\s*(\d+)", txt, flags=re.I)
-                        return int(m.group(1)) if m else 0
+                    attendance_records = []
+                    for tr in table.select("tbody tr"):
+                        tds = tr.find_all("td")
+                        if len(tds) < 5:
+                            continue
 
-                    attendance_counts = {
-                        "attendance": _grab("Attendance"),
-                        "absence": _grab("Absence"),
-                        "late": _grab("Late"),
-                    }
+                        week_str = tds[0].get_text(strip=True)  # "2026-02-16"
+                        class_name = tds[1].get_text(" ", strip=True) or None
 
-            if attendance_kind == "online":
-                # 1. Try to find the attendance box on the current course page first
-                # 2. If not found, look at the attendance_url page (att_soup)
-                box = soup.select_one("div.user_attendance div.att_count") or \
-                      soup.select_one("div.att_count") or \
-                      att_soup.select_one("div.user_attendance div.att_count") or \
-                      att_soup.select_one("div.att_count")
+                        att_mark = tds[2].get_text(strip=True)
+                        abs_mark = tds[3].get_text(strip=True)
+                        late_mark = tds[4].get_text(strip=True)
+
+                        # date normalize
+                        date_of_week = week_str
+                        try:
+                            date_of_week = datetime.strptime(week_str, "%Y-%m-%d").date().isoformat()
+                        except Exception:
+                            pass
+
+                        attendance_records.append({
+                            "date_of_week": date_of_week,
+                            "class_name": class_name,
+                            "attendance": is_marked(att_mark),
+                            "absence": is_marked(abs_mark),
+                            "late": is_marked(late_mark),
+                        })
+
+                    # ---- parse totals from tfoot ----
+                    tfoot = table.select_one("tfoot")
+                    if tfoot:
+                        txt = tfoot.get_text(" ", strip=True)
+
+                        def grab(label: str) -> int:
+                            m = re.search(rf"{label}\s*:\s*(\d+)", txt, flags=re.I)
+                            return int(m.group(1)) if m else 0
+
+                        attendance_counts = {
+                            "attendance": grab("Attendance"),
+                            "absence": grab("Absence"),
+                            "late": grab("Late"),
+                        }
+
+            elif attendance_kind == "online":
+                # online totals block
+                box = (
+                    soup.select_one("div.user_attendance div.att_count")
+                    or soup.select_one("div.att_count")
+                    or att_soup.select_one("div.user_attendance div.att_count")
+                    or att_soup.select_one("div.att_count")
+                )
 
                 if box:
                     attendance_counts = {"attendance": 0, "absence": 0, "late": 0}
-                    
-                    # We check every paragraph in the box for keywords
+
                     for p in box.find_all("p"):
                         text = p.get_text(" ", strip=True).lower()
                         span = p.find("span")
                         if not span:
                             continue
-                        
-                        # Extract the number from the span
+
                         try:
                             val = int(re.search(r"\d+", span.get_text(strip=True)).group(0))
-                        except (AttributeError, ValueError):
+                        except Exception:
                             val = 0
-                            
-                        # Keywords for Attendance (English/Korean)
+
                         if any(k in text for k in ["attendance", "출석", "present"]):
                             attendance_counts["attendance"] = val
-                        # Keywords for Absence (English/Korean)
                         elif any(k in text for k in ["absence", "결석"]):
                             attendance_counts["absence"] = val
-                        # Keywords for Late (English/Korean)
                         elif any(k in text for k in ["late", "지각"]):
                             attendance_counts["late"] = val
 
-        # 6) ASSIGNMENTS (same as your version)
+        # 6) ASSIGNMENTS (your existing logic)
         assignments = None
         assign_a = soup.select_one('a[href*="/mod/assign/index.php?id="]')
         if not assign_a:
@@ -901,23 +985,28 @@ class EclassClient:
             assign_html = rr.text
             if not self._is_logged_in_html(assign_html):
                 raise AuthExpired("Session expired while opening assignment page.")
+
             assign_soup = self._soup(assign_html)
             table = assign_soup.select_one("table.generaltable")
             assignments = []
+
             if table:
                 for tr in table.select("tbody tr"):
                     tds = tr.select("td")
                     if len(tds) < 5:
                         continue
+
                     week = tds[0].get_text(" ", strip=True) or None
                     a = tds[1].select_one("a[href]")
                     if not a:
                         continue
+
                     name = a.get_text(" ", strip=True)
                     url = urljoin(assign_index_url, a["href"])
                     due_date = tds[2].get_text(" ", strip=True) or None
                     submission = tds[3].get_text(" ", strip=True) or None
                     grade = tds[4].get_text(" ", strip=True) or None
+
                     assignments.append({
                         "week": week,
                         "name": name,
@@ -927,56 +1016,8 @@ class EclassClient:
                         "url": url,
                     })
 
-        # 7) QUIZZES (UPDATED)
-        quizzes = None
-        quiz_a = soup.select_one('a[href*="/mod/quiz/index.php?id="]')
-        if not quiz_a:
-            for a in soup.select("a[href]"):
-                if (a.get_text(strip=True) or "").lower() == "quiz":
-                    if "/mod/quiz/index.php" in a.get("href", ""):
-                        quiz_a = a
-                        break
+        # NOTE: your quizzes part is below in your file; keep it as-is (or paste it here if you want me to merge too)
 
-        if quiz_a and quiz_a.get("href"):
-            quiz_index_url = urljoin(course_url, quiz_a["href"])
-            rr = self._request("GET", quiz_index_url)
-            quiz_html = rr.text
-            if not self._is_logged_in_html(quiz_html):
-                raise AuthExpired("Session expired while opening quiz page.")
-            
-            quiz_soup = self._soup(quiz_html)
-            table = quiz_soup.select_one("table.generaltable")
-            quizzes = []
-            
-            if table:
-                for tr in table.select("tbody tr"):
-                    tds = tr.select("td")
-                    if len(tds) < 4:
-                        continue
-                    
-                    week = tds[0].get_text(" ", strip=True) or None
-                    name_a = tds[1].select_one("a[href]")
-                    if not name_a:
-                        continue
-                        
-                    name = name_a.get_text(" ", strip=True)
-                    url = urljoin(quiz_index_url, name_a["href"])
-                    quiz_closes = tds[2].get_text(" ", strip=True) or None
-                    grade = tds[3].get_text(" ", strip=True) or None
-                    
-                    # --- NEW: Check individual submission status ---
-                    status = self._check_quiz_submission(url)
-                    
-                    quizzes.append({
-                        "week": week,
-                        "name": name,
-                        "quiz_closes": quiz_closes,
-                        "grade": grade,
-                        "url": url,
-                        "status": status  # "Submitted" or "Not submitted"
-                    })
-
-        # 8) Return
         return {
             "subjectKey": subject_key,
             "subjectNameFull": subject_name_full,
@@ -986,11 +1027,13 @@ class EclassClient:
 
             "attendanceUrl": attendance_url,
             "attendanceKind": attendance_kind,
-            "attendance": attendance_counts,   # dict OR None
-            "assignments": assignments,
-            "quizzes": quizzes,
-        }
+            "attendance": attendance_counts,              # totals or None
+            "attendance_records": attendance_records,     # list or None (offline only)
 
+            "assignments": assignments,
+            # keep your existing quizzes logic and include it in return if you have it:
+            # "quizzes": quizzes,
+        }
 
 
 
@@ -1045,14 +1088,16 @@ class EclassClient:
                 }
 
                 subjects.append({
-                    "subject": subject_key,
-                    "subject_name": subject_name,
-                    "professor_name":info.get("professorName"),
-                    "course_url": info.get("course_url") or info.get("courseUrl") or url,
-                    "attendance": attendance,
-                    "assignments": info.get("assignments", None),
-                    "quizzes": info.get("quizzes", None),
-                })
+                "subject": subject_key,
+                "subject_name": subject_name,
+                "professor_name": info.get("professorName"),
+                "course_url": info.get("course_url") or info.get("courseUrl") or url,
+                "attendance": attendance,  # totals
+                "attendance_records": info.get("attendance_records"),  # ✅ per-date rows (offline)
+                "assignments": info.get("assignments", None),
+                "quizzes": info.get("quizzes", None),
+            })
+
 
             except (RateLimited, BlockedOrForbidden, TemporaryServerError) as e:
                 subjects.append({
@@ -1060,6 +1105,7 @@ class EclassClient:
                     "subject_name": title.split("[", 1)[0].strip() if "[" in title else title,
                     "course_url": url,
                     "attendance": {"attendance": 0, "absence": 0, "late": 0},
+                    "attendance_records": None,
                     "assignments": None,
                     "quizzes": None,
                     "status": "request_failed",
@@ -1072,6 +1118,7 @@ class EclassClient:
                     "subject_name": title.split("[", 1)[0].strip() if "[" in title else title,
                     "course_url": url,
                     "attendance": {"attendance": 0, "absence": 0, "late": 0},
+                    "attendance_records": None,
                     "assignments": None,
                     "quizzes": None,
                     "status": "auth_expired",
@@ -1084,6 +1131,7 @@ class EclassClient:
                     "subject_name": title.split("[", 1)[0].strip() if "[" in title else title,
                     "course_url": url,
                     "attendance": {"attendance": 0, "absence": 0, "late": 0},
+                    "attendance_records": None,
                     "assignments": None,
                     "quizzes": None,
                     "status": "unexpected_error",

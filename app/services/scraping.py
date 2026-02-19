@@ -8,7 +8,7 @@ from typing import Optional, Any
 TZ = ZoneInfo("Asia/Tashkent")
 from app.infra.redis_sync import redis_scrape_cache,redis_user_info_cache,redis_registered_users_sync
 from app.database.models import (
-    EclassSnapshot, User, Professor, Class, Subject, Enrollment, Assignment, Quiz
+    EclassSnapshot, User, Professor, Class, Subject, Enrollment, Assignment, Quiz,AttendanceInfo
 )
 from app.scraper.script import AuthExpired, BlockedOrForbidden, EclassClient, EclassError, LoginFailed, RateLimited, pack_student_rest
 
@@ -33,7 +33,7 @@ def send_message(user_telegram_id: str, message: str):
     })
 
 import json
-from datetime import datetime
+from datetime import datetime,date
 from typing import Optional, Dict, Any, List
 
 
@@ -120,6 +120,67 @@ class ScrapService:
     def __init__(self, session: Session,is_send = True):
         self.is_send = is_send
         self.session = session
+    
+
+    def _parse_date(self, s: Any) -> Optional[date]:
+        if not s:
+            return None
+        try:
+            return datetime.strptime(str(s).strip(), "%Y-%m-%d").date()
+        except Exception:
+            return None
+
+    def _sync_attendance_infos(self, enrollment: Enrollment, data: dict) -> None:
+        """
+        Save detailed attendance rows to AttendanceInfo table.
+        NO notifications.
+        """
+        rows = data.get("attendance_records") or []
+
+
+        if not rows:
+            return
+
+        # Load existing infos for this enrollment
+        existing = self.session.execute(
+            select(AttendanceInfo).where(AttendanceInfo.enrollment_id == enrollment.id)
+        ).scalars().all()
+
+        # key = (date_of_week, class_name)
+        existing_map = {(x.date_of_week, (x.class_name or "").strip()): x for x in existing}
+
+        for r in rows:
+            d = self._parse_date(r.get("date_of_week") or r.get("date") or r.get("week"))
+            if not d:
+                continue
+
+            class_name = (r.get("class_name") or r.get("class") or "").strip() or None
+
+            # Accept either booleans OR "status"
+            status = (r.get("status") or "").strip().lower()
+            attendance = bool(r.get("attendance")) or status in {"attendance", "present", "출석", "○"}
+            absence = bool(r.get("absence")) or status in {"absence", "absent", "결석"}
+            late = bool(r.get("late")) or status in {"late", "지각"}
+
+            key = (d, (class_name or "").strip())
+            obj = existing_map.get(key)
+
+            if obj is None:
+                obj = AttendanceInfo(
+                    enrollment_id=enrollment.id,
+                    date_of_week=d,
+                    class_name=class_name,
+                    attendance=attendance,
+                    absence=absence,
+                    late=late,
+                )
+                self.session.add(obj)
+            else:
+                obj.class_name = class_name
+                obj.attendance = attendance
+                obj.absence = absence
+                obj.late = late
+                self.session.add(obj)
 
     # =========================
     # Helpers
@@ -666,7 +727,10 @@ class ScrapService:
                 for subj in final_json.get("subjects", []):
                     enrollment = self._get_or_create_enrollment(user, subj)
                     scraped_enrollment_ids.add(enrollment.id)
+
                     self.compare_with_old_values(user, enrollment, subj)
+                    self._sync_attendance_infos(enrollment, subj)
+
 
                 # 2) Hard delete dropped enrollments
                 db_enrollments = self.session.execute(
@@ -767,6 +831,8 @@ class ScrapService:
                 scraped_enrollment_ids.add(enrollment.id)
 
                 self.compare_with_old_values(user, enrollment, subj)
+                self._sync_attendance_infos(enrollment, subj)
+
             
 
             # 2) HARD DELETE enrollments that are in DB but NOT in scrape
