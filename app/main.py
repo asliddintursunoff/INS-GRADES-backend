@@ -23,16 +23,23 @@ class NgrokSkipBrowserWarningMiddleware(BaseHTTPMiddleware):
         response.headers["ngrok-skip-browser-warning"] = "true"
         return response
     
-app.add_middleware(NgrokSkipBrowserWarningMiddleware)
+
+
+
+
 origins = [
-    "*" 
+    "https://ins-admin-frontend.vercel.app",
+    # "http://localhost:3000",
 ]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins =origins,
-    # allow_credentials=True,
+    allow_origins=origins,
+    allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"]
+    allow_headers=["*"],
 )
+
+
 app.include_router(master_router)
 
