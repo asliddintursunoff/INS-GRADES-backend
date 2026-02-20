@@ -1,5 +1,3 @@
-# app/services/admin_panel/user_attendance.py
-
 from __future__ import annotations
 
 from typing import Dict, List
@@ -34,6 +32,7 @@ class UserAttendanceService:
                 select(Subject.id, Subject.name).where(Subject.id == subject_id)
             )
         ).first()
+
         if subj_row is None:
             raise HTTPException(status_code=404, detail="Subject not found")
 
@@ -77,11 +76,17 @@ class UserAttendanceService:
         by_user: Dict[UUID, StudentAttendanceOut] = {}
 
         for enrollment, user in rows:
-            full_name = " ".join([p for p in [user.first_name, user.last_name] if p]).strip() or user.student_id
+            # UI display name: First Last OR student_id
+            full_name = " ".join([p for p in [user.first_name, user.last_name] if p]).strip()
+            if not full_name:
+                full_name = user.student_id
 
             if user.id not in by_user:
                 by_user[user.id] = StudentAttendanceOut(
                     id=user.id,
+                    student_id=user.student_id,
+                    first_name=user.first_name,
+                    last_name=user.last_name,
                     name=full_name,
                     telegram_id=user.telegram_id,
                     phone=user.phone_number,
@@ -151,7 +156,9 @@ class UserAttendanceService:
             for ai in attendance_infos
         ]
 
-        full_name = " ".join([p for p in [user.first_name, user.last_name] if p]).strip() or user.student_id
+        full_name = " ".join([p for p in [user.first_name, user.last_name] if p]).strip()
+        if not full_name:
+            full_name = user.student_id
 
         enrollment_out = EnrollmentWithInfoOut(
             id=enrollment.id,
@@ -163,6 +170,9 @@ class UserAttendanceService:
 
         student_out = OneStudentEnrollmentOut(
             id=user.id,
+            student_id=user.student_id,
+            first_name=user.first_name,
+            last_name=user.last_name,
             name=full_name,
             telegram_id=user.telegram_id,
             phone=user.phone_number,

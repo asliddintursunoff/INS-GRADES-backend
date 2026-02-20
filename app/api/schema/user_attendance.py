@@ -1,72 +1,92 @@
-# app/api/schema/user_attendance.py
-
 from __future__ import annotations
 
 from datetime import date
 from typing import List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel
+from sqlmodel import SQLModel
 
 
-class EnrollmentMiniOut(BaseModel):
+# ---------- Shared small DTOs ----------
+
+class EnrollmentMiniOut(SQLModel):
     id: UUID
     attendance: Optional[int] = None
     late: Optional[int] = None
     absence: Optional[int] = None
 
 
-class StudentAttendanceOut(BaseModel):
-    id: UUID
-    name: str
-    telegram_id: Optional[str] = None
-    phone: Optional[str] = None
-    enrollments: List[EnrollmentMiniOut]
-
-
-class AttendanceInfoOut(BaseModel):
+class AttendanceInfoOut(SQLModel):
     id: UUID
     date_of_week: date
     class_name: Optional[str] = None
-    attendance: bool
-    absence: bool
-    late: bool
+    attendance: bool = False
+    absence: bool = False
+    late: bool = False
 
 
-class EnrollmentWithInfoOut(BaseModel):
+# ---------- Students by Subject ----------
+
+class StudentAttendanceOut(SQLModel):
+    # internal UUID (keep it for backend/frontend logic)
+    id: UUID
+
+    # ✅ what you want to show in UI
+    student_id: Optional[str] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+
+    # already used in UI
+    name: str
+    telegram_id: Optional[str] = None
+    phone: Optional[str] = None
+
+    enrollments: List[EnrollmentMiniOut] = []
+
+
+class SubjectMetaWithProfessorsOut(SQLModel):
+    subject_id: UUID
+    subject_name: str
+    professors: List[str] = []
+
+
+class StudentsBySubjectResponse(SQLModel):
+    subject: SubjectMetaWithProfessorsOut
+    students: List[StudentAttendanceOut] = []
+
+
+# ---------- One Student by Enrollment ----------
+
+class EnrollmentWithInfoOut(SQLModel):
     id: UUID
     attendance: Optional[int] = None
     late: Optional[int] = None
     absence: Optional[int] = None
-    exact_info: Optional[List[AttendanceInfoOut]] = None
+    exact_info: List[AttendanceInfoOut] = []
 
 
-class OneStudentEnrollmentOut(BaseModel):
+class OneStudentEnrollmentOut(SQLModel):
+    # internal UUID
     id: UUID
+
+    # ✅ what you want to show in UI
+    student_id: Optional[str] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+
     name: str
     telegram_id: Optional[str] = None
     phone: Optional[str] = None
-    enrollments: List[EnrollmentWithInfoOut]
+
+    enrollments: List[EnrollmentWithInfoOut] = []
 
 
-class SubjectMetaOut(BaseModel):
+class SubjectMetaWithProfessorOut(SQLModel):
     subject_id: UUID
     subject_name: str
-
-
-class SubjectMetaWithProfessorsOut(SubjectMetaOut):
-    professors: List[str] = []
-
-
-class SubjectMetaWithProfessorOut(SubjectMetaOut):
     professor_name: str
 
 
-class StudentsBySubjectResponse(BaseModel):
-    subject: SubjectMetaWithProfessorsOut
-    students: List[StudentAttendanceOut]
-
-
-class OneStudentEnrollmentResponse(BaseModel):
+class OneStudentEnrollmentResponse(SQLModel):
     subject: SubjectMetaWithProfessorOut
     student: OneStudentEnrollmentOut
