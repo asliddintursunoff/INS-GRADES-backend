@@ -168,25 +168,25 @@ class ClassService:
 
 
 
-    
 
-    async def update_existing_classtimes_by_csv(self, file: UploadFile) -> dict:
+    async def replace_classtimes_by_csv(self, file: UploadFile) -> dict:
         """
-        Updates ONLY existing ClassTime rows for existing classes.
-        - No deletes
-        - No creates (no new Class/ClassTime/Subject/Group/Professor)
-        Matching rules:
-          Class: (group_name + subject)
-          ClassTime: (week_day + start_time) within that class
-        Updates:
-          room, end_time (optionally professor_id if you enable it below)
+        ✅ No full reset
+        ✅ No creating new Subject/Group/Professor/Class
+        ✅ For each class found in CSV: delete its old ClassTime rows and create new ones
+        ✅ Does NOT touch Enrollment / Attendance / Users
         """
+
         if file.content_type not in ALLOWED_CONTENT_TYPES:
             raise HTTPException(status_code=400, detail="File type not allowed. Allowed only for .csv!")
         if file.filename.split(".")[-1].lower() not in ALLOWED_EXTENSIONS:
             raise HTTPException(status_code=400, detail="File type not allowed. Allowed only for .csv!")
 
-        df = pd.read_csv(file.file)
+        try:
+            df = pd.read_csv(file.file)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"CSV read failed: {str(e)}")
+
         data_lst = df.to_dict(orient="records")
 
         try:
@@ -198,47 +198,36 @@ class ClassService:
             prof_cache: dict[str, Professor] = {}
             class_cache: dict[tuple[str, str], Class] = {}  # (group_name, subject_name) -> Class
 
-            updated_count = 0
-
+            # group rows by class (group_name + subject)
+            by_class: dict[tuple[str, str], list[ClassBase]] = {}
             for r in rows:
-                # -------------------------
-                # Subject (must exist)
-                # -------------------------
-                subject = subject_cache.get(r.subject)
+                key = (r.group_name.strip(), r.subject.strip())
+                by_class.setdefault(key, []).append(r)
+
+            deleted_classes = 0
+            inserted_classtimes = 0
+
+            for (group_name, subject_name), items in by_class.items():
+                # Subject must exist
+                subject = subject_cache.get(subject_name)
                 if not subject:
-                    res = await self.session.execute(select(Subject).where(Subject.name == r.subject))
+                    res = await self.session.execute(select(Subject).where(Subject.name == subject_name))
                     subject = res.scalar_one_or_none()
                     if not subject:
-                        raise HTTPException(status_code=404, detail=f"Subject not found: {r.subject}")
-                    subject_cache[r.subject] = subject
+                        raise HTTPException(status_code=404, detail=f"Subject not found: {subject_name}")
+                    subject_cache[subject_name] = subject
 
-                # -------------------------
-                # Group (must exist)
-                # -------------------------
-                group = group_cache.get(r.group_name)
+                # Group must exist
+                group = group_cache.get(group_name)
                 if not group:
-                    res = await self.session.execute(select(Group).where(Group.group_name == r.group_name))
+                    res = await self.session.execute(select(Group).where(Group.group_name == group_name))
                     group = res.scalar_one_or_none()
                     if not group:
-                        raise HTTPException(status_code=404, detail=f"Group not found: {r.group_name}")
-                    group_cache[r.group_name] = group
+                        raise HTTPException(status_code=404, detail=f"Group not found: {group_name}")
+                    group_cache[group_name] = group
 
-                # -------------------------
-                # Professor (must exist) - optional update
-                # -------------------------
-                prof = prof_cache.get(r.professor)
-                if not prof:
-                    res = await self.session.execute(select(Professor).where(Professor.name == r.professor))
-                    prof = res.scalar_one_or_none()
-                    if not prof:
-                        raise HTTPException(status_code=404, detail=f"Professor not found: {r.professor}")
-                    prof_cache[r.professor] = prof
-
-                # -------------------------
-                # Class MUST exist (no create)
-                # -------------------------
-                cache_key = (r.group_name, r.subject)
-                klass = class_cache.get(cache_key)
+                # Class must exist (no create)
+                klass = class_cache.get((group_name, subject_name))
                 if not klass:
                     res = await self.session.execute(
                         select(Class).where(
@@ -250,48 +239,46 @@ class ClassService:
                     if not klass:
                         raise HTTPException(
                             status_code=404,
-                            detail=f"Class not found for group={r.group_name}, subject={r.subject}"
+                            detail=f"Class not found for group={group_name}, subject={subject_name}",
                         )
-                    class_cache[cache_key] = klass
+                    class_cache[(group_name, subject_name)] = klass
 
-                # OPTIONAL: update professor for existing class
-                # (comment out if you want to NEVER touch professor)
+                # Optional: update professor from FIRST row of that class in CSV
+                first_prof_name = items[0].professor.strip()
+                prof = prof_cache.get(first_prof_name)
+                if not prof:
+                    res = await self.session.execute(select(Professor).where(Professor.name == first_prof_name))
+                    prof = res.scalar_one_or_none()
+                    if not prof:
+                        raise HTTPException(status_code=404, detail=f"Professor not found: {first_prof_name}")
+                    prof_cache[first_prof_name] = prof
+
                 if klass.professor_id != prof.id:
                     klass.professor_id = prof.id
                     self.session.add(klass)
 
-                # -------------------------
-                # ClassTime MUST exist (no create)
-                # Identify by (class_id + week_day + start_time)
-                # -------------------------
-                if r.week_day is None or r.start_time is None:
-                    raise HTTPException(
-                        status_code=422,
-                        detail=f"Invalid CSV row (week_day/start_time missing): {r.model_dump()}"
-                    )
+                # ✅ delete old classtimes for this class
+                await self.session.execute(delete(ClassTime).where(ClassTime.class_id == klass.id))
+                deleted_classes += 1
 
-                res = await self.session.execute(
-                    select(ClassTime).where(
-                        ClassTime.class_id == klass.id,
-                        ClassTime.week_day == r.week_day,
-                        ClassTime.start_time == r.start_time,
-                    )
-                )
-                ct = res.scalar_one_or_none()
-                if not ct:
-                    raise HTTPException(
-                        status_code=404,
-                        detail=(
-                            "ClassTime not found for "
-                            f"group={r.group_name}, subject={r.subject}, week_day={r.week_day}, start_time={r.start_time}"
+                # ✅ insert new classtimes
+                for r in items:
+                    if r.week_day is None or r.start_time is None:
+                        raise HTTPException(
+                            status_code=422,
+                            detail=f"Invalid row (week_day/start_time missing): {r.model_dump()}",
+                        )
+
+                    self.session.add(
+                        ClassTime(
+                            class_id=klass.id,
+                            room=r.room.strip() if isinstance(r.room, str) else r.room,
+                            week_day=r.week_day,
+                            start_time=r.start_time,
+                            end_time=r.end_time,
                         )
                     )
-
-                # update fields
-                ct.room = r.room
-                ct.end_time = r.end_time
-                self.session.add(ct)
-                updated_count += 1
+                    inserted_classtimes += 1
 
             try:
                 await self.session.commit()
@@ -299,14 +286,20 @@ class ClassService:
                 await self.session.rollback()
                 raise HTTPException(
                     status_code=409,
-                    detail=f"DB integrity error while updating (maybe conflicts with UNIQUE constraints). {str(e)}"
+                    detail=f"DB integrity error while inserting ClassTime rows: {str(e)}",
                 )
 
-            return {"status": "ok", "updated_rows": updated_count}
+            return {
+                "status": "ok",
+                "classes_updated": deleted_classes,
+                "classtimes_inserted": inserted_classtimes,
+            }
 
         except ValidationError as e:
+            await self.session.rollback()
             raise HTTPException(status_code=422, detail=str(e))
         except HTTPException:
+            await self.session.rollback()
             raise
         except Exception as e:
             await self.session.rollback()
