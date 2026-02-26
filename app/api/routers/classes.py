@@ -14,4 +14,4 @@ async def rebase_subjects(session:class_session,file:UploadFile):
 
 @router.post("/update-classes-with-csv")
 async def update_classes(session:class_session,file:UploadFile):
-    return await session.update_existing_classtimes_by_csv(file)
+    return await session.replace_classtimes_by_csv(file)
